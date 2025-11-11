@@ -3,44 +3,48 @@ const userModel =  require('../Models/userModel');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const Redisclient = require('../Config/redis');
+const {Uservalidator, loginValidator} = require('../Validator/validator');
+const { status } = require('init');
 
 
 async function userRegister(req, res, next){
     try{
-            const {name,email,password, mobile, dob, gender} =  req.body;
-            if(!name || !email ||!password ||!mobile ||!dob || !gender) {
-                const error = new Error("Fields are Missing");
-                error.statusCode = 400;
-                return next(error);
-                }
-            
-            let parseddate;
-            if(dob){
-                let dobdate = moment(dob, "DD/MM/YYYY", true)
-            if(!dobdate.isValid()){
-                    const error = new Error("Date of birth is not valid");
-                    error.statusCode = 400;
-                    return next(error);
-                }
-                 parseddate  =dobdate.toDate();
-        }
-        //Mobile Number 
-        
-            if (!/^\+?92\d{10}$/.test(mobile)) {
-                    const error = new Error(" mobile Number is not valid");
-                    error.statusCode = 400;
-                    return next(error);
-            }
+          const{error, value} = Uservalidator.validate(req.body,{abortEarly: false});
 
-             const mobileint = mobile.toString();
+            if(error) {
+                const errormessage =error.details.map(err=>err.message).join(', ')
+                return next({
+                    status:'error',
+                    statusCode:400,
+                    errorCode:'UR-001',
+                    description:`Fields are missing ${errormessage}`,
+                    filter: 'Attempted to hit while no fields are present there'
 
-            const hashedPassword = await bcrypt.hash(password, 10);
-            const emailExist = await userModel.find({email});
-          if(emailExist){
-            const error = new Error(" Email Already Exsit");
-                    error.statusCode = 400;
-                    return next(error);
+                });
+                }
+
+            const {name,email,password, mobile, dob, gender} =  value;
+            const hashedPassword = await bcrypt.hash(password, 10); 
+           
+            const emailExist = await userModel.findOne({email});
+            const numberExist  =await userModel.findOne({mobile});
+           
+            if(emailExist){
+                 return next({
+                    status: 'error',
+                    statusCode: 400,
+                    errorCode:'UR-002',
+                    description:'Email Already Exists'
+                 });
           }
+          if(numberExist){
+                
+                return next({
+                    status:'error',
+                    statusCode: 400,
+                    description:'Number Already Exists'
+                });
+            }
             let photo = req.file
             ?{url:req.file.path} :null
 
@@ -48,8 +52,8 @@ async function userRegister(req, res, next){
                     name,
                     email,
                     password:hashedPassword,
-                    mobile:mobileint,
-                    dob:parseddate,
+                    mobile,
+                    dob,
                     gender,
                     photo
                   
@@ -70,8 +74,16 @@ async function userRegister(req, res, next){
 async function userLogin(req, res, next){
   try{
 
-    const {email, password} = req.body;
-   if(!email || !password){
+    const {error, value} = loginValidator.validate(req.body)
+    if(error){
+        const errormessage = error.details.map(err=>err.message).join(',');
+        const err = new Error(errormessage);
+        err.statusCode = 400;
+        return next(err);
+    }
+
+    const {email, password}  = value;
+    if(!email || !password){
         const error = new Error("Email or Passwod Required");
         error.statusCode = 404;
         return next(error);
@@ -143,7 +155,8 @@ async function viewProfile(req, res, next){
 
 async function updateProfile(req, res, next){
    try{
-     const user  = req.user;
+
+     const user  = req.user;  
      const updates  = req.body;
 
    let photo = req.file ? {url:req.file.path}:null;
