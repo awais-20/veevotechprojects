@@ -1,0 +1,189 @@
+<!DOCTYPE html> 
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Chat App</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: Arial, sans-serif;
+            background: #f0f4f8;
+            padding: 40px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            width: 420px;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h2 { margin-bottom: 20px; color: #2c3e50; }
+        input, button, select {
+            width: 100%; padding: 10px; margin-bottom: 12px;
+            border: 1px solid #ccc; border-radius: 5px;
+        }
+        button {
+            background: #3498db; color: white; cursor: pointer;
+        }
+        button:hover { background: #2980b9; }
+        .messages {
+            height: 250px; overflow-y: auto;
+            padding: 10px; border: 1px solid #ddd; border-radius: 5px;
+            background: #fafafa; margin-bottom: 10px;
+        }
+        .messages p {
+            background: #e1f5fe; padding: 6px 10px;
+            border-radius: 5px; margin-bottom: 6px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <!-- LOGIN -->
+    <div id="loginSection">
+        <h2>Login</h2>
+        <input type="email" id="email" placeholder="Email">
+        <input type="text" id="otp" placeholder="OTP">
+        <button onclick="verifyOTP()">Verify & Login</button>
+    </div>
+
+    <!-- USERS BUTTON -->
+    <div id="afterLogin" style="display:none;">
+        <button onclick="loadUsers()">Show All Users</button>
+        <br><br>
+
+        <!-- DROP-DOWN USERS -->
+        <select id="userDropdown">
+            <option value="">Select receiver</option>
+        </select>
+
+        <hr><br>
+
+        <!-- ROOM JOIN -->
+        <input type="text" id="roomName" placeholder="Enter Room Name (ex: businessRoom)">
+        <button onclick="joinRoom()">Join Room</button>
+        <button onclick="leaveRoom()">Leave Room</button>
+
+
+        <br><br>
+
+        <!-- CHAT -->
+        <div class="messages" id="messages"></div>
+
+        <input type="text" id="msg" placeholder="Type message">
+        <button onclick="sendMessage()">Send</button>
+    </div>
+
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+    let socket = io();
+    let currentRoom = "";
+    let myEmail = "";
+
+    async function verifyOTP() {
+        const res = await fetch('/api/user/otpVerify', {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            credentials: "include",
+            body: JSON.stringify({
+                email: email.value,
+                otp: otp.value
+            })
+        });
+
+        if (res.ok) {
+            myEmail = email.value;
+            loginSection.style.display = "none";
+            afterLogin.style.display = "block";
+        } else {
+            alert("Invalid OTP");
+        }
+    }
+
+    async function loadUsers() {
+        const res = await fetch('/api/user/users', { credentials: "include" });
+        const data = await res.json();
+
+        if (!data.success) return alert("Error loading users");
+
+        const dropdown = document.getElementById("userDropdown");
+        dropdown.innerHTML = `<option value="">Select receiver</option>`;
+
+        data.users.forEach(u => {
+            if (u.email !== myEmail) { 
+                const opt = document.createElement("option");
+                opt.value = u.email;
+                opt.innerText = u.email;
+                dropdown.appendChild(opt);
+            }
+        });
+
+        alert("Users Loaded!");
+    }
+
+    function joinRoom() {
+        const roomInput = document.getElementById("roomName").value.trim();
+        if (!roomInput) return alert("Enter room name");
+
+        currentRoom = roomInput;
+
+        socket.emit("join-room", currentRoom);
+        console.log("Joined room:", currentRoom);
+
+        const messages = document.getElementById("messages");
+        messages.innerHTML += `<p>Joined room: ${currentRoom}</p>`;
+    }
+
+    function sendMessage() {
+        const message = document.getElementById("msg").value.trim();
+        const receiver = document.getElementById("userDropdown").value;
+
+        if (!message) return;
+        if (!currentRoom) return alert("Join a room first");
+     
+        socket.emit("send-message", {
+            room: currentRoom,
+            sender: myEmail,
+            receiver,
+            message
+        });
+
+        document.getElementById("msg").value = "";
+    }
+
+    socket.on("receive-message", (data) => {
+        const box = document.getElementById("messages");
+        const p = document.createElement("p");
+        p.innerHTML = `<b>${data.sender}:</b> ${data.message}`;
+        box.appendChild(p);
+    });
+
+   socket.on("chat-history", (msgs) => {
+    const box = document.getElementById("messages");
+
+    msgs.forEach(m => {
+        const p = document.createElement("p");
+        p.innerHTML = `<b>${m.sender}:</b> ${m.message}`;
+        box.appendChild(p);
+    });
+});
+
+function leaveRoom() {
+    if (!currentRoom) return alert("No room joined");
+
+    socket.emit("leave-room", currentRoom);
+    messages.innerHTML += `<p>You left room: ${currentRoom}</p>`;
+    currentRoom = "";
+}
+
+
+</script>
+
+</body>
+</html>

@@ -1,41 +1,53 @@
 const jwt = require('jsonwebtoken');
 const userModel = require('../Models/userModel');
 const Redisclient = require('../Config/redis');
-async function isAuth(req, res, next){
-   try{
-    
-    //const token =  req. cookies.usertoken || req.header("Authorization")?.replace("Bearer " , "" );
-    let token =  req. cookies.usertoken || req.headers.authorization;
-    if(token && token.startsWith("Bearer ")){
-       token = token.split(' ')[1];
+
+async function isAuth(req, res, next) {
+  try {
+    let token =  req.cookies?.token ||req.headers.authorization;
+
+    if (token && token.startsWith("Bearer ")) {
+      token = token.split(" ")[1];
     }
-    
-   // const new_token_decode = new_token.split(' ')[1];
+      if (!token && req.cookies && req.cookies.token) {
+    token = req.cookies.token;
+  }
 
-    if(!token){
-        const error = new Error("Access Denied");
-        error.statusCode =404;
-        return next(error);
-    } 
-   
-    const decoded = await jwt.verify(token, process.env.SECRETKEY);
+    if (!token) {
+      const error = new Error("Access Denied. No token provided.");
+      error.statusCode = 401;
+      return next(error);
+    }
+
+    const decoded = jwt.verify(token, process.env.SECRETKEY);
+
+    if (!decoded?.userId) {
+      const error = new Error("Invalid token.");
+      error.statusCode = 401;
+      return next(error);
+    }
+
     const storedToken = await Redisclient.get(decoded.userId.toString());
-    console.log(storedToken);
-    if(!storedToken || storedToken !==token){
-      const error = new Error("Session Expired Please Login Again");
-        error.statusCode =404;
-        return next(error);
-    } 
-   const founduser = await userModel.findById(decoded.userId);
+    if (!storedToken || storedToken !== token) {
+      const error = new Error("Session Expired. Please login again.");
+      error.statusCode = 401;
+      return next(error);
+    }
 
-    req.user = founduser;
+    const user = await userModel.findById(decoded.userId);
+    if (!user) {
+      const error = new Error("User not found.");
+      error.statusCode = 404;
+      return next(error);
+    }
+
+    req.user = user;
     next();
-
- } catch(error){
+  } catch (error) {
     console.log(error);
+    error.statusCode = error.statusCode || 500;
     return next(error);
- }
-
+  }
 }
 
-module.exports = isAuth
+module.exports = isAuth;

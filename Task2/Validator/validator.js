@@ -34,6 +34,7 @@ const Uservalidator = joi.object({
         'any.required': 'Date of Birth is required',
         'any.invalid': 'Date of Birth should have this format: DD/MM/YYYY'
     }),
+    template: joi.number().optional(),
     gender: joi.string().valid("Male", "Female", "Other").default("Male"),
     photo: joi.object({
         url: joi.string().uri()
