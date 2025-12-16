@@ -11,13 +11,14 @@ const router = require('./Routes/userRoute');
 //const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
 const cookie = require("cookie")
-const {sendMessage} = require('./Controllers/chatController');
+const {sendMessage, privatechat} = require('./Controllers/chatController');
 //app.use(helmet());
 const {Server} = require('socket.io');
 
 const jwt = require('jsonwebtoken');
 const {RabitConnection}= require('./Core_App_Connectivities/Rabitmq');
 const message = require("./Models/messageModel");
+const Room = require('./Models/roomModel');
  RabitConnection();
 require('./Services/munshi.servic');
 require('./Services/event_router.service');
@@ -54,26 +55,32 @@ dbConnection();
 });
 
 io.on("connection", (socket) => {
-    console.log("User connected");
+    socket.join(socket.userId);
+    console.log("User connected",);
  
 
- socket.on("join-room", async (room) => {
-    socket.join(room);
-    console.log("User joined room:", room);
+ socket.on("join-room", async (roomName) => {
+    socket.join(roomName);
 
-    const oldMessages = await message.find({ room }).sort({ createdAt: 1 });
+    const roomDoc = await Room.findOne({ name: roomName });
+    if (!roomDoc) return socket.emit("chat-history", []);
+
+    const oldMessages = await message.find({ room: roomDoc._id })
+        .sort({ createdAt: 1 });
 
     socket.emit("chat-history", oldMessages);
 });
   
     socket.on("send-message", (data)=>sendMessage(data, io));
-
-
+ 
+    socket.on('private-chat', (data)=>privatechat(data, io));
+  
+  
     socket.on('leave-room', (room)=>{
         socket.leave(room)
         console.log('room left', room);
     });
-
+   
     socket.on("disconnect", () => {
         console.log("User disconnected");
     });

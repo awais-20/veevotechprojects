@@ -9,7 +9,7 @@ async function sendMessage(data, io){
     if(!data.room || !data.message ||!data.sender)  return;
 
         await sendToRabbitMQ("chat_queue", {
-          room: data.room,
+          room: data.room|| null,
           sender: data.sender,
           receiver: data.receiver,
           message: data.message,
@@ -17,13 +17,13 @@ async function sendMessage(data, io){
         });
         console.log("Message queued in RabbitMQ:", data);
 
-    const dbdata  =   await messageModel.create({
-            room: data.room|| null,
-            sender: data.sender,
-            receiver: data.receiver,
-            message: data.message
-        });
-        console.log('db dta', dbdata);
+    // const dbdata  =   await messageModel.create({
+    //         room: data.room|| null,
+    //         sender: data.sender,
+    //         receiver: data.receiver,
+    //         message: data.message
+    //     });
+    //     console.log('db dta', dbdata);
         
         
         io.to(data.room).emit("receive-message", {
@@ -31,15 +31,39 @@ async function sendMessage(data, io){
            receiver: data.receiver,
            message: data.message
         });
-
+   
 
     } catch (err) {
         console.log("Send message error:", err.message);
     }
 
 };
+  
+async function privatechat(data, io){
+   try {
+    if(!data.sender || !data.message ||!data.receiver)  return;
+
+        await sendToRabbitMQ("chat_queue", {
+          room: data.room|| null,
+          sender: data.sender,
+          receiver: data.receiver,
+          message: data.message,
+          timestamp: Date.now()
+        });
+        console.log("Message queued in RabbitMQ:", data);
+
+          io.to(data.receiver).emit("receive-private", {
+              sender: data.sender,
+              message: data.message
+          });
+
+} 
 
 
+catch (err) {
+        console.log("Send message error:", err.message);
+    }
 
 
-module.exports = {sendMessage}
+  }
+module.exports = {sendMessage, privatechat}

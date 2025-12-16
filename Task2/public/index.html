@@ -54,6 +54,7 @@
     <!-- USERS BUTTON -->
     <div id="afterLogin" style="display:none;">
         <button onclick="loadUsers()">Show All Users</button>
+        <button onclick = "privateChat()"> chat Privately</button>
         <br><br>
 
         <!-- DROP-DOWN USERS -->
@@ -86,7 +87,9 @@
     let currentRoom = "";
     let myEmail = "";
 
-    async function verifyOTP() {
+   
+    async function verifyOTP() 
+    {
         const res = await fetch('/api/user/otpVerify', {
             method: "POST",
             headers: {"Content-Type": "application/json"},
@@ -103,7 +106,7 @@
             afterLogin.style.display = "block";
         } else {
             alert("Invalid OTP");
-        }
+         }
     }
 
     async function loadUsers() {
@@ -126,8 +129,33 @@
 
         alert("Users Loaded!");
     }
+function privateChat() {
+    const msg = document.getElementById("msg").value.trim();
+    const selectedUser = document.getElementById("userDropdown").value;
 
-    function joinRoom() {
+  if (!selectedUser || !msg) {
+        alert("Enter both receiver & message");
+        return;
+    }
+
+    socket.emit("private-chat", {
+        sender: myEmail,
+        receiver: selectedUser,
+        message: msg
+    });
+
+    document.getElementById("msg").value = "";
+}
+socket.on("receive-private", (data) => {
+    const box = document.getElementById("messages");
+    const p = document.createElement("p");
+    p.innerHTML = `<b>${data.sender} (private):</b> ${data.message}`;
+    box.appendChild(p);
+});
+
+  
+  
+  function joinRoom() {
         const roomInput = document.getElementById("roomName").value.trim();
         if (!roomInput) return alert("Enter room name");
 
@@ -145,7 +173,7 @@
         const receiver = document.getElementById("userDropdown").value;
 
         if (!message) return;
-        if (!currentRoom) return alert("Join a room first");
+       // if (!currentRoom) return alert("Join a room first");
      
         socket.emit("send-message", {
             room: currentRoom,
